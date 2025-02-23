@@ -98,10 +98,7 @@ Optimised for Microsoft Graph PowerShell v2.25.0.
 --------------------------------------------------------------------------------
 5. FUNCTIONS IN DETAIL
 --------------------------------------------------------------------------------
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.1  Connect-Graph
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.1  Connect-Graph
 Usage:
     `Connect-Graph`
 
@@ -110,11 +107,9 @@ Description:
     prompts you to sign in interactively (if not already authenticated).
     This is often the first function you’ll run.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.2  Get-UpdatableGroups
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.2  Get-UpdatableGroups
 Usage:
-    Get-UpdatableGroups -Output "<YourOutputFile.csv>"
+    `Get-UpdatableGroups -Output "<YourOutputFile.csv>"`
 
 Description:
     Lists all groups in the tenant and checks whether you are allowed to update
@@ -124,11 +119,9 @@ Parameter:
     -Output  (String)
        CSV file path for exporting details about which groups are "updatable."
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.3  Add-SelfToGroup
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.3  Add-SelfToGroup
 Usage:
-    Add-SelfToGroup -GroupId <String> -Email <String>
+    `Add-SelfToGroup -GroupId <String> -Email <String>`
 
 Description:
     Adds the user to the specified group, given the group’s object ID and 
@@ -138,32 +131,26 @@ Parameters:
     -GroupId  (String)
     -Email    (String)
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.4  Remove-SelfFromGroup
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.4  Remove-SelfFromGroup
 Usage:
-    Remove-SelfFromGroup -GroupId <String> -Email <String>
+    `Remove-SelfFromGroup -GroupId <String> -Email <String>`
 
 Description:
     Removes the user from the specified group. Similar permission requirements 
     to Add-SelfToGroup.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.5  Get-SharePointSiteURLs
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.5  Get-SharePointSiteURLs
 Usage:
-    Get-SharePointSiteURLs [-Output <String>]
+    `Get-SharePointSiteURLs [-Output <String>]`
 
 Description:
     Queries SharePoint & OneDrive drives using the Graph Search API, returning
     the webUrl for each discovered site. If -Output is provided, the results go
     to CSV.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.6  Invoke-GraphRecon
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.6  Invoke-GraphRecon
 Usage:
-    Invoke-GraphRecon
+    `Invoke-GraphRecon`
 
 Description:
     Performs an overall reconnaissance:
@@ -173,21 +160,17 @@ Description:
     4) Uses 'estimateAccess' to summarise which high-level directory actions
        you are allowed to perform.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.7  Get-SecurityGroups
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.7  Get-SecurityGroups
 Usage:
-    Get-SecurityGroups [-OutputFile <String>]
+    `Get-SecurityGroups [-OutputFile <String>]`
 
 Description:
     Retrieves all security-enabled groups and enumerates their members. Exports
     results (by default) to "security_groups.csv" if -OutputFile is specified.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.8  Invoke-DumpCAPS
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.8  Invoke-DumpCAPS
 Usage:
-    Invoke-DumpCAPS [-ResolveGuids]
+    `Invoke-DumpCAPS [-ResolveGuids]`
 
 Description:
     Dumps all conditional access policies in the tenant, printing:
@@ -199,117 +182,97 @@ Description:
   _The optional -ResolveGuids switch is a placeholder for future
   resolution of GUID-based references._
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.9  Invoke-DumpApps
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+##5.9  Invoke-DumpApps
 Usage:
-    Invoke-DumpApps
+    `Invoke-DumpApps`
 
 Description:
     Enumerates all App Registrations and Enterprise Apps (service principals),
     along with any assigned permissions or app role assignments. Requires
     'Application.Read.All' and 'Directory.Read.All'.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.10 Get-DynamicGroups
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.10 Get-DynamicGroups
 Usage:
-    Get-DynamicGroups [-OutputPath <String>]
+    `Get-DynamicGroups [-OutputPath <String>]`
 
 Description:
     Finds all groups that have a dynamic membership rule, then uses
     estimateAccess to see whether you can update them. Exports grouped results
     (allowed / conditional / denied) to CSV.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.11 Get-AzureADUsers
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.11 Get-AzureADUsers
 Usage:
-    Get-AzureADUsers [-OutFile <String>]
+    `Get-AzureADUsers [-OutFile <String>]`
 
 Description:
     Retrieves all userPrincipalNames (UPNs) in your Azure AD tenant. Useful for
     a quick user enumeration. Exports them to a text file (e.g., "users.txt").
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 5.12 Invoke-InviteGuest
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Usage:
-    Invoke-InviteGuest -DisplayName <String> -EmailAddress <String> 
+    `Invoke-InviteGuest -DisplayName <String> -EmailAddress <String> 
                        [-RedirectUrl <String>] [-SendInvitationMessage <Bool>] 
-                       [-CustomMessageBody <String>]
+                       [-CustomMessageBody <String>]`
 
 Description:
     Sends a guest user invitation email to an external address. By default, the
     user is taken to the MyApps portal to accept the invitation.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.13 Invoke-DriveFileDownload
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.13 Invoke-DriveFileDownload
 Usage:
-    Invoke-DriveFileDownload -DriveItemIDs <String> -FileName <String> 
-                             [-Tokens <Object[]>]
+    `Invoke-DriveFileDownload -DriveItemIDs <String> -FileName <String> 
+                             [-Tokens <Object[]>]`
 
 Description:
     Downloads a single file from a drive (OneDrive/SharePoint) using a combined
     driveId:itemId string. Used internally by the search function, but you can
     call it manually as well.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.14 Invoke-SearchSharePointAndOneDrive
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.14 Invoke-SearchSharePointAndOneDrive
 Usage:
-    Invoke-SearchSharePointAndOneDrive -SearchTerm <String> [-ResultCount <Int>]
+    `Invoke-SearchSharePointAndOneDrive -SearchTerm <String> [-ResultCount <Int>]
                                        [-UnlimitedResults] [-OutFile <String>]
-                                       [-ReportOnly]
+                                       [-ReportOnly]`
 
 Description:
     Searches SharePoint & OneDrive for files matching a search term (including
-    KQL operators like "password AND filetype:xlsx"). Optionally downloads
+    KQL operators like `"password AND filetype:xlsx"`). Optionally downloads
     matching files if you confirm. Exports results to CSV if -OutFile is given.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.15 Invoke-SearchUserAttributes
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.15 Invoke-SearchUserAttributes
 Usage:
-    Invoke-SearchUserAttributes -SearchTerm <String> [-OutFile <String>]
+    `Invoke-SearchUserAttributes -SearchTerm <String> [-OutFile <String>]`
 
 Description:
     Retrieves ALL users, enumerates various attributes (e.g., displayName, mail,
     jobTitle), and checks if the given search term appears. Exports matches 
     to CSV if requested.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.16 Invoke-SearchMailbox
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.16 Invoke-SearchMailbox
 Usage:
-    Invoke-SearchMailbox -SearchTerm <String> [-MessageCount <Int>] 
-                         [-OutFile <String>] [-PageResults]
+    `Invoke-SearchMailbox -SearchTerm <String> [-MessageCount <Int>] 
+                         [-OutFile <String>] [-PageResults]`
 
 Description:
     Searches your mailbox for emails containing the specified term in subject,
     body, or other fields. Exports findings to CSV if -OutFile is provided, and
     can fetch multiple pages if -PageResults is set.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.17 Invoke-SearchTeamsMessages
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.17 Invoke-SearchTeamsMessages
 Usage:
-    Invoke-SearchTeamsMessages -KeyPhrase <String> [-BatchSize <Int>] 
-                               [-OutputFile <String>] [-FetchAll]
+    `Invoke-SearchTeamsMessages -KeyPhrase <String> [-BatchSize <Int>] 
+                               [-OutputFile <String>] [-FetchAll]`
 
 Description:
     Lists Teams channels the signed-in user can access, retrieving messages that
     contain the specified phrase. Can save them to CSV if -OutputFile is set
     and fetch all results with -FetchAll.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-5.18 Invoke-GraphEnum
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+## 5.18 Invoke-GraphEnum
 Usage:
-    Invoke-GraphEnum [-DetectorFile <String>] [-DisableRecon] [-DisableUsers] 
+    `Invoke-GraphEnum [-DetectorFile <String>] [-DisableRecon] [-DisableUsers] 
                      [-DisableGroups] [-DisableEmail] [-DisableSharePoint] 
-                     [-DisableTeams] [-Delay <Int>] [-Jitter <Double>]
+                     [-DisableTeams] [-Delay <Int>] [-Jitter <Double>]`
 
 Description:
     A "master" function that performs a series of enumerations in one pass:
