@@ -11,28 +11,43 @@ $ascii = @"
 
 Write-Host $ascii
 
-Write-Host "USAGE SUMMARY" -ForegroundColor Cyan
-Write-Host "-------------" -ForegroundColor Cyan
-Write-Host "Connect-Graph           - Install/Import essential modules & connect to Graph"
-Write-Host "Get-UpdatableGroups     - Check which groups you can update (memberships), export CSV"
-Write-Host "Add-SelfToGroup         - Add your own user account to a specified group"
-Write-Host "Remove-SelfFromGroup    - Remove your own account from a specified group"
-Write-Host "Get-SharePointSiteURLs  - Discover SharePoint/OneDrive site URLs, optionally export CSV"
-Write-Host "Invoke-GraphRecon       - Gather tenant & user info, check your directory permissions"
-Write-Host "Get-SecurityGroups      - Retrieve security groups and their members, export CSV"
-Write-Host "Invoke-DumpCAPS         - Enumerate Conditional Access policies"
-Write-Host "Invoke-DumpApps         - Enumerate App Registrations & Enterprise Apps"
-Write-Host "Get-DynamicGroups       - List dynamic membership groups and test access to them"
-Write-Host "Get-AzureADUsers        - Retrieve all userPrincipalNames, save to a text file"
-Write-Host "Invoke-InviteGuest      - Invite an external (guest) user to the tenant"
-Write-Host "Invoke-DriveFileDownload- Download a single SharePoint/OneDrive file by driveItemId"
-Write-Host "Invoke-SearchSharePointAndOneDrive - Search for files by keyword, optionally download"
-Write-Host "Invoke-SearchUserAttributes        - Search for a keyword across user attributes"
-Write-Host "Invoke-SearchMailbox              - Search your mailbox for a keyword, export results"
-Write-Host "Invoke-SearchTeamsMessages        - Search Teams channel messages for a keyword"
-Write-Host "Invoke-GraphEnum                  - Run a comprehensive enumeration (Recon, Users, Groups, etc.)"
-Write-Host ""
-Write-Host "Call any function above as needed, e.g.:"
+Write-Host "================================================================================" -ForegroundColor Cyan
+Write-Host " Usage Summary" -ForegroundColor Cyan
+Write-Host "================================================================================" -ForegroundColor Cyan
+
+Write-Host "`n[ Connection Functions ]" -ForegroundColor Cyan
+Write-Host " Connect-Graph                - Install/Import essential modules & connect to Graph"
+
+Write-Host "`n[ Enumeration Functions ]" -ForegroundColor Cyan
+Write-Host " Get-UpdatableGroups          - Check which groups you can update (memberships), export CSV"
+Write-Host " Get-SecurityGroups           - Retrieve security groups and their members, export CSV"
+Write-Host " Get-DynamicGroups            - List dynamic membership groups and test access"
+Write-Host " Get-AzureADUsers             - Retrieve all userPrincipalNames, save to a text file"
+Write-Host " Get-PrivilegedUsers          - Enumerate users/groups/SPNs with privileged roles"
+Write-Host " Get-MFAStatus                - Check MFA methods configured for all users"
+Write-Host " Get-Devices                  - Enumerate registered devices & their owners, export CSV"
+Write-Host " Get-TenantEnumeration        - Enumerate tenant config (domains, federation, external settings, etc.)"
+Write-Host " Invoke-GraphRecon            - Gather tenant & user info, check your directory permissions"
+Write-Host " Invoke-DumpCAPS              - Enumerate Conditional Access policies"
+Write-Host " Invoke-DumpApps              - Enumerate App Registrations & Enterprise Apps"
+Write-Host " Invoke-GraphEnum             - Comprehensive enumeration (Recon, Users, Groups, Email, SP/OD, etc.)"
+
+Write-Host "`n[ Content Recon Functions ]" -ForegroundColor Cyan
+Write-Host " Get-SharePointSiteURLs       - Discover SharePoint/OneDrive site URLs, optionally export CSV"
+Write-Host " Invoke-SearchSharePointAndOneDrive - Search for files by keyword, optionally download"
+Write-Host " Invoke-DriveFileDownload     - Download a single SharePoint/OneDrive file by driveItemID"
+Write-Host " Invoke-SearchMailbox         - Search your mailbox by keyword, optionally export CSV"
+Write-Host " Invoke-SearchTeamsMessages   - Search Teams channel messages for a keyword"
+Write-Host " Invoke-SearchUserAttributes  - Search user attributes for a keyword"
+
+Write-Host "`n[ Attack Functions ]" -ForegroundColor Cyan
+Write-Host " Add-SelfToGroup             - Add your own user account to a specified group"
+Write-Host " Remove-SelfFromGroup        - Remove your own account from a specified group"
+Write-Host " Invoke-InviteGuest          - Invite an external (guest) user to the tenant"
+Write-Host " Invoke-InjectOAuthApp       - Create an App Registration & grant OAuth permissions"
+Write-Host " Invoke-SecurityGroupCloner  - Clone a security group and replicate its membership"
+
+Write-Host "`nExample usage:" -ForegroundColor Cyan
 Write-Host "    PS C:\\> Connect-Graph"
 Write-Host "    PS C:\\> Get-UpdatableGroups -Output 'Updatable_Groups.csv'"
 Write-Host ""
