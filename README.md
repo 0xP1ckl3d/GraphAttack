@@ -66,6 +66,12 @@ This PowerShell script is inspired by [GraphRunner](https://github.com/dafthack/
 
 3. Once loaded, you can call the defined functions directly in the same PowerShell session.
 
+Alternatively, you can run import this script from a remote source:
+
+   ```powershell
+   Invoke-RestMethod -Uri https://raw.githubusercontent.com/0xP1ckl3d/GraphAttack/refs/heads/main/GraphAttack.ps1 | Invoke-Expression
+   ```
+
 ---
 
 ## 4. Script Overview
