@@ -1,3 +1,5 @@
+# Microsoft Graph Enumeration & Attack Script
+
  _______________________________________________________________________________
                                                                                
         ____                 _        _   _   _             _                  
@@ -6,334 +8,557 @@
       | |_| | | | (_| | |_) | | | |/ ___ \ |_| || (_| | (__|   <               
        \____|_|  \__,_| .__/|_| |_/_/   \_\__|\__\__,_|\___|_|\_\              
                       |_|                                                      
-_______________________________________________________________________________
+ ______________________________________________________________________________
 
-                       M I C R O S O F T   G R A P H
-               E N U M E R A T I O N  &  A T T A C K  S C R I P T
+                      M I C R O S O F T   G R A P H
+             E N U M E R A T I O N  &  A T T A C K   S C R I P T
 
---------------------------------------------------------------------------------
-CONTENTS
---------------------------------------------------------------------------------
-1.  Introduction
-2.  Prerequisites
-3.  Installation
-4.  Script Overview
-5.  Functions in Detail
-    5.1  Connect-Graph
-    5.2  Get-UpdatableGroups
-    5.3  Add-SelfToGroup
-    5.4  Remove-SelfFromGroup
-    5.5  Get-SharePointSiteURLs
-    5.6  Invoke-GraphRecon
-    5.7  Get-SecurityGroups
-    5.8  Invoke-DumpCAPS
-    5.9  Invoke-DumpApps
-    5.10 Get-DynamicGroups
-    5.11 Get-AzureADUsers
-    5.12 Invoke-InviteGuest
-    5.13 Invoke-DriveFileDownload
-    5.14 Invoke-SearchSharePointAndOneDrive
-    5.15 Invoke-SearchUserAttributes
-    5.16 Invoke-SearchMailbox
-    5.17 Invoke-SearchTeamsMessages
-    5.18 Invoke-GraphEnum
-6.  Example Usage
-7.  Troubleshooting & Common Issues
-8.  Licence
+---
 
---------------------------------------------------------------------------------
-1. INTRODUCTION
---------------------------------------------------------------------------------
-This PowerShell script is based on https://github.com/dafthack/GraphRunner. 
-The main difference is the ability to authenticate via interactive auth. This 
-script is a rewrite of Graphrunner for Microsoft Graph PowerShell.
-The script handles majority of the same functionality as GraphRunner:
+## Contents
 
-• Retrieving and manipulating group membership
-• Searching SharePoint, OneDrive, and mailboxes
-• Enumerating conditional access policies, app registrations, and more
-• Performing organisational and user reconnaissance
+1. [Introduction](#1-introduction)  
+2. [Prerequisites](#2-prerequisites)  
+3. [Installation](#3-installation)  
+4. [Script Overview](#4-script-overview)  
+5. [Functions in Detail](#5-functions-in-detail)  
+   1. [Connection Functions](#51-connection-functions)  
+   2. [Enumeration Functions](#52-enumeration-functions)  
+   3. [Content Recon Functions](#53-content-recon-functions)  
+   4. [Attack Functions](#54-attack-functions)  
+6. [Example Usage](#6-example-usage)  
+7. [Troubleshooting & Common Issues](#7-troubleshooting--common-issues)  
+8. [Licence](#8-licence)
 
-_Note, that testing of all features has been limited, so feel free to
-log an issue for bugs or feature requests._
+---
 
-Optimised for Microsoft Graph PowerShell v2.25.0.
+## 1. Introduction
 
---------------------------------------------------------------------------------
-2. PREREQUISITES
---------------------------------------------------------------------------------
-• A Windows or cross-platform PowerShell environment (PowerShell 5.1+ or 7.x).
-• Permissions to install modules if not already present.
-• An account with sufficient Azure AD / Microsoft 365 permissions (e.g. 
-  Global Reader, Security Reader, or relevant delegated permissions).
-• Internet access to reach Microsoft Graph endpoints.
+This PowerShell script is inspired by [GraphRunner](https://github.com/dafthack/GraphRunner) but rewrites the functionality for the Microsoft Graph PowerShell modules with interactive authentication support. Key features include:
 
---------------------------------------------------------------------------------
-3. INSTALLATION
---------------------------------------------------------------------------------
-1) Save this .ps1 script locally.
+- Retrieving and manipulating group membership.
+- Searching SharePoint, OneDrive, and mailboxes.
+- Enumerating conditional access policies, app registrations, devices, tenant details, and more.
+- Performing comprehensive organisational and user reconnaissance.
 
-2) Load the script in PowerShell:
+> **Note**: Testing of all features has been limited, so please log an issue for bugs or feature requests.  
+> **Optimised for** Microsoft Graph PowerShell v2.25.0.
 
-   `Import-Module .\graphattack.ps1`
+---
 
-3) Once loaded, you can call the defined functions directly in the same 
-   PowerShell session.
+## 2. Prerequisites
 
---------------------------------------------------------------------------------
-4. SCRIPT OVERVIEW
---------------------------------------------------------------------------------
-• Installs missing Microsoft Graph modules automatically.
-• Imports them for usage in the current session.
-• Provides multiple distinct functions for enumerating and auditing:
-  - AD Groups (including dynamic membership checks)
-  - Security groups
+- A Windows or cross-platform PowerShell environment (PowerShell 5.1+ or 7.x).  
+- Permissions to install modules if not already present.  
+- An account with sufficient Azure AD / Microsoft 365 permissions (e.g. Global Reader, Security Reader, or relevant delegated permissions).  
+- Internet access to reach Microsoft Graph endpoints.
+
+---
+
+## 3. Installation
+
+1. Save this `.ps1` script locally.
+2. Load the script in PowerShell:
+
+   ```powershell
+   Import-Module .\graphattack.ps1
+   ```
+
+3. Once loaded, you can call the defined functions directly in the same PowerShell session.
+
+---
+
+## 4. Script Overview
+
+- Installs missing Microsoft Graph modules automatically (if you don’t already have them).
+- Imports them for usage in the current session.
+- Provides multiple distinct functions for enumerating and auditing:
+  - Azure AD Groups (including dynamic membership checks)
+  - Security groups and privileged roles
   - SharePoint & OneDrive search
-  - Guest invitations
-  - App registrations & Enterprise apps
+  - Guest invitations and OAuth app injection
+  - Devices, tenant settings, app registrations & enterprise apps
   - Mailbox and Teams message searching
-• Does not execute anything automatically aside from module installations 
-  and a basic connection check.
+- Offers both single-purpose functions and a “master” enumeration function.
 
---------------------------------------------------------------------------------
-5. FUNCTIONS IN DETAIL
---------------------------------------------------------------------------------
-## 5.1  Connect-Graph
-Usage:
-    `Connect-Graph`
+> **Note**: The script does not execute anything automatically aside from module installations and a basic connection check.
 
-Description:
-    Installs & imports required Microsoft Graph submodules if missing, then
-    prompts you to sign in interactively (if not already authenticated).
-    This is often the first function you’ll run.
+---
 
-## 5.2  Get-UpdatableGroups
-Usage:
-    `Get-UpdatableGroups -Output "<YourOutputFile.csv>"`
+## 5. Functions in Detail
 
-Description:
-    Lists all groups in the tenant and checks whether you are allowed to update
-    each group’s membership. Requires 'Group.Read.All' or similar permissions.
+### 5.1 Connection Functions
 
-Parameter:
-    -Output  (String)
-       CSV file path for exporting details about which groups are "updatable."
+---
 
-## 5.3  Add-SelfToGroup
-Usage:
-    `Add-SelfToGroup -GroupId <String> -Email <String>`
+#### Connect-Graph
 
-Description:
-    Adds the user to the specified group, given the group’s object ID and 
-    users email.
+**Usage**:
+```powershell
+Connect-Graph
+```
 
-Parameters:
-    -GroupId  (String)
-    -Email    (String)
+**Description**:  
+- Installs and imports required Microsoft Graph submodules if missing, then prompts you to sign in interactively (if not already authenticated).
+- This is often the first function you’ll run to ensure you’re ready to call other commands.
 
-## 5.4  Remove-SelfFromGroup
-Usage:
-    `Remove-SelfFromGroup -GroupId <String> -Email <String>`
+---
 
-Description:
-    Removes the user from the specified group. Similar permission requirements 
-    to Add-SelfToGroup.
+### 5.2 Enumeration Functions
 
-## 5.5  Get-SharePointSiteURLs
-Usage:
-    `Get-SharePointSiteURLs [-Output <String>]`
+---
 
-Description:
-    Queries SharePoint & OneDrive drives using the Graph Search API, returning
-    the webUrl for each discovered site. If -Output is provided, the results go
-    to CSV.
+#### Get-UpdatableGroups
 
-## 5.6  Invoke-GraphRecon
-Usage:
-    `Invoke-GraphRecon`
+**Usage**:
+```powershell
+Get-UpdatableGroups -Output "<YourOutputFile.csv>"
+```
 
-Description:
-    Performs an overall reconnaissance:
-    1) Retrieves organisation details (tenant ID, domains, etc.).
-    2) Retrieves current user details.
-    3) Reads default user role permissions from the authorisation policy.
-    4) Uses 'estimateAccess' to summarise which high-level directory actions
-       you are allowed to perform.
+**Description**:  
+- Lists all groups in the tenant and checks whether you (the signed-in account) are allowed to update each group’s membership.  
+- Requires `Group.Read.All` or similar permissions.
 
-## 5.7  Get-SecurityGroups
-Usage:
-    `Get-SecurityGroups [-OutputFile <String>]`
+**Parameter**:
+- **-Output** (String):  
+  CSV file path for exporting details about which groups are updatable.
 
-Description:
-    Retrieves all security-enabled groups and enumerates their members. Exports
-    results (by default) to "security_groups.csv" if -OutputFile is specified.
+---
 
-## 5.8  Invoke-DumpCAPS
-Usage:
-    `Invoke-DumpCAPS [-ResolveGuids]`
+#### Get-SecurityGroups
 
-Description:
-    Dumps all conditional access policies in the tenant, printing:
-    • Display name
-    • State
-    • Included/Excluded users, apps, platforms
-    • Grant/session controls
-    
-  _The optional -ResolveGuids switch is a placeholder for future
-  resolution of GUID-based references._
+**Usage**:
+```powershell
+Get-SecurityGroups [-OutputFile <String>]
+```
 
-##5.9  Invoke-DumpApps
-Usage:
-    `Invoke-DumpApps`
+**Description**:  
+- Retrieves all **security-enabled groups** and enumerates their members.  
+- Exports results to `security_groups.csv` if `-OutputFile` is specified.
 
-Description:
-    Enumerates all App Registrations and Enterprise Apps (service principals),
-    along with any assigned permissions or app role assignments. Requires
-    'Application.Read.All' and 'Directory.Read.All'.
+---
 
-## 5.10 Get-DynamicGroups
-Usage:
-    `Get-DynamicGroups [-OutputPath <String>]`
+#### Get-DynamicGroups
 
-Description:
-    Finds all groups that have a dynamic membership rule, then uses
-    estimateAccess to see whether you can update them. Exports grouped results
-    (allowed / conditional / denied) to CSV.
+**Usage**:
+```powershell
+Get-DynamicGroups [-OutputPath <String>]
+```
 
-## 5.11 Get-AzureADUsers
-Usage:
-    `Get-AzureADUsers [-OutFile <String>]`
+**Description**:  
+- Finds all groups that have a dynamic membership rule.  
+- Uses “estimateAccess” to see whether you can update them.  
+- Exports grouped results (allowed / conditional / denied) to CSV if you provide `-OutputPath`.
 
-Description:
-    Retrieves all userPrincipalNames (UPNs) in your Azure AD tenant. Useful for
-    a quick user enumeration. Exports them to a text file (e.g., "users.txt").
+---
 
-5.12 Invoke-InviteGuest
-Usage:
-    `Invoke-InviteGuest -DisplayName <String> -EmailAddress <String> 
-                       [-RedirectUrl <String>] [-SendInvitationMessage <Bool>] 
-                       [-CustomMessageBody <String>]`
+#### Get-AzureADUsers
 
-Description:
-    Sends a guest user invitation email to an external address. By default, the
-    user is taken to the MyApps portal to accept the invitation.
+**Usage**:
+```powershell
+Get-AzureADUsers [-OutFile <String>]
+```
 
-## 5.13 Invoke-DriveFileDownload
-Usage:
-    `Invoke-DriveFileDownload -DriveItemIDs <String> -FileName <String> 
-                             [-Tokens <Object[]>]`
+**Description**:  
+- Retrieves all userPrincipalNames (UPNs) in your Azure AD tenant.  
+- Useful for a quick user enumeration.  
+- Exports them to a text file (e.g., `users.txt`) if `-OutFile` is specified.
 
-Description:
-    Downloads a single file from a drive (OneDrive/SharePoint) using a combined
-    driveId:itemId string. Used internally by the search function, but you can
-    call it manually as well.
+---
 
-## 5.14 Invoke-SearchSharePointAndOneDrive
-Usage:
-    `Invoke-SearchSharePointAndOneDrive -SearchTerm <String> [-ResultCount <Int>]
-                                       [-UnlimitedResults] [-OutFile <String>]
-                                       [-ReportOnly]`
+#### Get-PrivilegedUsers
 
-Description:
-    Searches SharePoint & OneDrive for files matching a search term (including
-    KQL operators like `"password AND filetype:xlsx"`). Optionally downloads
-    matching files if you confirm. Exports results to CSV if -OutFile is given.
+**Usage**:
+```powershell
+Get-PrivilegedUsers
+```
 
-## 5.15 Invoke-SearchUserAttributes
-Usage:
-    `Invoke-SearchUserAttributes -SearchTerm <String> [-OutFile <String>]`
+**Description**:  
+- Enumerates users or entities with privileged roles (e.g., Global Admin, Security Admin) in Azure AD.  
+- Fetches all role assignments, resolves each principal (user, group, or service principal) and displays the assigned role.
 
-Description:
-    Retrieves ALL users, enumerates various attributes (e.g., displayName, mail,
-    jobTitle), and checks if the given search term appears. Exports matches 
-    to CSV if requested.
+---
 
-## 5.16 Invoke-SearchMailbox
-Usage:
-    `Invoke-SearchMailbox -SearchTerm <String> [-MessageCount <Int>] 
-                         [-OutFile <String>] [-PageResults]`
+#### Get-MFAStatus
 
-Description:
-    Searches your mailbox for emails containing the specified term in subject,
-    body, or other fields. Exports findings to CSV if -OutFile is provided, and
-    can fetch multiple pages if -PageResults is set.
+**Usage**:
+```powershell
+Get-MFAStatus
+```
 
-## 5.17 Invoke-SearchTeamsMessages
-Usage:
-    `Invoke-SearchTeamsMessages -KeyPhrase <String> [-BatchSize <Int>] 
-                               [-OutputFile <String>] [-FetchAll]`
+**Description**:  
+- Retrieves MFA (Multi-Factor Authentication) status for all users in Azure AD.  
+- Checks if they have configured MFA methods (phone, authenticator, etc.).  
+- **Note**: Requires `UserAuthenticationMethod.Read.All` for complete access.
 
-Description:
-    Lists Teams channels the signed-in user can access, retrieving messages that
-    contain the specified phrase. Can save them to CSV if -OutputFile is set
-    and fetch all results with -FetchAll.
+---
 
-## 5.18 Invoke-GraphEnum
-Usage:
-    `Invoke-GraphEnum [-DetectorFile <String>] [-DisableRecon] [-DisableUsers] 
-                     [-DisableGroups] [-DisableEmail] [-DisableSharePoint] 
-                     [-DisableTeams] [-Delay <Int>] [-Jitter <Double>]`
+#### Get-Devices
 
-Description:
-    A "master" function that performs a series of enumerations in one pass:
-      1) Organisation & user recon
-      2) User listing
-      3) Security groups listing
-      4) Email, SharePoint/OneDrive, Teams searching
-    The -DetectorFile can contain custom search queries. You can skip
-    components by specifying the respective -Disable switches.
+**Usage**:
+```powershell
+Get-Devices
+```
 
-_Note: The detector file implementation is not yet functional. This will be
-fixed in future releases._
+**Description**:  
+- Retrieves all registered devices in Azure AD, including assigned owners.  
+- Exports the device list to `devices.csv` in the current directory by default.
 
---------------------------------------------------------------------------------
-6. EXAMPLE USAGE
---------------------------------------------------------------------------------
-• Connect to Graph, then run reconnaissance:
-  Connect-Graph
-  Invoke-GraphRecon
+---
 
-• Export updatable groups to CSV:
-  Get-UpdatableGroups -Output "Updatable_Groups.csv"
+#### Get-TenantEnumeration
 
-• Add or remove yourself from a group:
-  Add-SelfToGroup -GroupId "00000000-aaaa-bbbb-cccc-111111111111" -Email "user@tenant"
-  Remove-SelfFromGroup -GroupId "00000000-aaaa-bbbb-cccc-111111111111" -Email "user@tenant"
+**Usage**:
+```powershell
+Get-TenantEnumeration
+```
 
-• Enumerate security groups, export to CSV:
-  Get-SecurityGroups -OutputFile "SecurityGroups.csv"
+**Description**:  
+- Enumerates detailed Azure AD tenant settings, including:
+  - Tenant ID, default domain, verified domains
+  - Federation configuration for each domain
+  - External collaboration settings
+  - Security defaults
+  - Licence assignments
+- Useful for full tenant profiling.
 
-• Full SharePoint & OneDrive search for “password”:
-  Invoke-SearchSharePointAndOneDrive -SearchTerm "password" -UnlimitedResults
+---
 
-• Search your mailbox for “secret” and export results:
-  Invoke-SearchMailbox -SearchTerm "secret" -OutFile "SecretEmails.csv" -PageResults
+#### Invoke-GraphRecon
 
-• Run the “master” enumeration (detectors in a JSON file):
-  Invoke-GraphEnum -DetectorFile "detectors.json"
+**Usage**:
+```powershell
+Invoke-GraphRecon
+```
 
---------------------------------------------------------------------------------
-7. TROUBLESHOOTING & COMMON ISSUES
---------------------------------------------------------------------------------
-1) **Permissions**:
-   If any function fails (e.g., “Access denied”), ensure you have the correct 
-   roles or admin consents (Directory.Read.All, Group.Read.All, etc.). Permissions
-   can be added by running (for example):
+**Description**:  
+- Performs an overall reconnaissance in one go:
+  1. Retrieves organisation details (tenant ID, domains, etc.).
+  2. Retrieves the current user’s details.
+  3. Reads the default user role permissions from the authorisation policy.
+  4. Uses `estimateAccess` to summarise which high-level directory actions you are allowed to perform.
 
-   ```Connect-MgGraph -Scopes "User.Read.All","Group.ReadWrite.All"```
+---
 
-3) **Rate Limits**:
-   For large tenants, you may encounter HTTP 429 (rate limit). The script may 
-   pause and retry. If this persists, try smaller queries or run off-peak.
+#### Invoke-DumpCAPS
 
-4) **Module Installation**:
-   The script attempts to install missing modules. Check your environment’s
-   policy if installations fail.
+**Usage**:
+```powershell
+Invoke-DumpCAPS [-ResolveGuids]
+```
 
---------------------------------------------------------------------------------
-8. LICENCE
---------------------------------------------------------------------------------
-This script is provided under the MIT Licence (unless otherwise indicated by your
-organisation’s policies). You are free to modify and distribute it per licence
-terms.
+**Description**:  
+- Dumps all conditional access policies in the tenant, printing:
+  - Display name, state, included/excluded users/groups/apps/platforms
+  - Grant/session controls
+- `-ResolveGuids` is a placeholder for future expansions that resolve GUID-based references to names.
 
+---
+
+#### Invoke-DumpApps
+
+**Usage**:
+```powershell
+Invoke-DumpApps
+```
+
+**Description**:  
+- Enumerates all App Registrations and Enterprise Apps (service principals), along with any assigned permissions or app role assignments.  
+- Requires `Application.Read.All` and `Directory.Read.All` roles.
+
+---
+
+#### Invoke-GraphEnum
+
+**Usage**:
+```powershell
+Invoke-GraphEnum [-DetectorFile <String>] [-DisableRecon] [-DisableUsers] [-DisableGroups]
+                 [-DisableEmail] [-DisableSharePoint] [-DisableTeams] [-Delay <Int>] [-Jitter <Double>]
+```
+
+**Description**:  
+- A “master” function that performs a series of enumerations in one pass:
+  1. Organisation & user recon
+  2. User listing
+  3. Security groups listing
+  4. Email, SharePoint/OneDrive, Teams searching
+
+- The `-DetectorFile` can contain custom search queries.
+- You can skip components by specifying the respective `-Disable*` switches.
+- **Note**: The detector file implementation is not yet functional, but planned for future releases.
+
+---
+
+### 5.3 Content Recon Functions
+
+---
+
+#### Get-SharePointSiteURLs
+
+**Usage**:
+```powershell
+Get-SharePointSiteURLs [-Output <String>]
+```
+
+**Description**:  
+- Queries SharePoint & OneDrive drives using the Graph Search API.
+- Returns the `webUrl` for each discovered site.
+- If `-Output` is provided, the results are exported to CSV.
+
+---
+
+#### Invoke-SearchSharePointAndOneDrive
+
+**Usage**:
+```powershell
+Invoke-SearchSharePointAndOneDrive -SearchTerm <String> 
+                                   [-ResultCount <Int>] 
+                                   [-UnlimitedResults] 
+                                   [-OutFile <String>] 
+                                   [-ReportOnly]
+```
+
+**Description**:  
+- Searches SharePoint & OneDrive for files matching a search term (including KQL operators like `"password AND filetype:xlsx"`).
+- Optionally downloads matching files if you confirm.
+- Exports results to CSV if `-OutFile` is given.
+- `-UnlimitedResults` attempts to retrieve as many results as possible.
+
+---
+
+#### Invoke-DriveFileDownload
+
+**Usage**:
+```powershell
+Invoke-DriveFileDownload -DriveItemIDs <String> -FileName <String>
+                         [-Tokens <Object[]>]
+```
+
+**Description**:  
+- Downloads a single file from a drive (OneDrive/SharePoint) using a combined `driveId:itemId` string.
+- Used internally by the search function, but you can call it manually as well.
+
+---
+
+#### Invoke-SearchMailbox
+
+**Usage**:
+```powershell
+Invoke-SearchMailbox -SearchTerm <String> 
+                    [-MessageCount <Int>] 
+                    [-OutFile <String>] 
+                    [-PageResults]
+```
+
+**Description**:  
+- Searches **your mailbox** for emails containing the specified term in subject, body, or other fields.
+- Exports findings to CSV if `-OutFile` is provided.
+- Can fetch multiple pages if `-PageResults` is set.
+
+---
+
+#### Invoke-SearchTeamsMessages
+
+**Usage**:
+```powershell
+Invoke-SearchTeamsMessages -KeyPhrase <String> 
+                           [-BatchSize <Int>] 
+                           [-OutputFile <String>] 
+                           [-FetchAll]
+```
+
+**Description**:  
+- Lists Teams channels the signed-in user can access, retrieving messages that contain the specified phrase.
+- Can export to CSV if `-OutputFile` is set and fetch all results with `-FetchAll`.
+
+---
+
+#### Invoke-SearchUserAttributes
+
+**Usage**:
+```powershell
+Invoke-SearchUserAttributes -SearchTerm <String> [-OutFile <String>]
+```
+
+**Description**:  
+- Retrieves **all users**, enumerates various attributes (`displayName`, `mail`, `jobTitle`, etc.), and checks if the given search term appears.
+- Exports matches to CSV if requested.
+
+---
+
+### 5.4 Attack Functions
+
+---
+
+#### Add-SelfToGroup
+
+**Usage**:
+```powershell
+Add-SelfToGroup -GroupId <String> -Email <String>
+```
+
+**Description**:  
+- Adds **your user** to the specified group, given the group’s object ID and your email address.
+- Permissions required: Typically `Group.ReadWrite.All`.
+
+**Parameters**:
+- **-GroupId** (String)
+- **-Email** (String)
+
+---
+
+#### Remove-SelfFromGroup
+
+**Usage**:
+```powershell
+Remove-SelfFromGroup -GroupId <String> -Email <String>
+```
+
+**Description**:  
+- Removes **your user** from the specified group.
+- Similar permission requirements to **Add-SelfToGroup**.
+
+---
+
+#### Invoke-InviteGuest
+
+**Usage**:
+```powershell
+Invoke-InviteGuest -DisplayName <String> -EmailAddress <String> 
+                  [-RedirectUrl <String>] 
+                  [-SendInvitationMessage <Bool>] 
+                  [-CustomMessageBody <String>]
+```
+
+**Description**:  
+- Sends a guest user invitation email to an external address.
+- By default, the user is taken to the MyApps portal to accept the invitation.
+
+---
+
+#### Invoke-InjectOAuthApp
+
+**Usage**:
+```powershell
+Invoke-InjectOAuthApp -AppName <String> -ReplyUrl <String> 
+                      [-Scope <String[]>] 
+                      [-Tokens <Object[]>]
+```
+
+**Description**:  
+- Automates the deployment of an App Registration in Azure AD.
+- Creates an App Registration, assigns OAuth permissions, and generates a consent URL for you to use.
+- Useful if portal access is restricted but you can still register apps via Graph.
+
+**Parameters**:
+- **-AppName** (String): The display name of the new App Registration.
+- **-ReplyUrl** (String): The redirect URL where OAuth tokens will be sent.
+- **-Scope** (String[]): Comma-separated Microsoft Graph permissions (e.g., `"Mail.Read","User.Read"`). If omitted, defaults to broad “backdoor” permissions.
+- **-Tokens** (Object[]): If you have pre-authenticated tokens, you can supply them; otherwise, function attempts interactive login.
+
+---
+
+#### Invoke-SecurityGroupCloner
+
+**Usage**:
+```powershell
+Invoke-SecurityGroupCloner
+```
+
+**Description**:  
+- Clones a security group and copies its members to a newly created group.
+- Optionally adds your current user (and any other specified user) to the cloned group.
+- Useful for replicating membership quickly, or establishing a group with near-identical privileges.
+
+---
+
+## 6. Example Usage
+
+Below are several quick examples of how to use this script:
+
+1. **Connect to Microsoft Graph, then run high-level reconnaissance**:
+   ```powershell
+   Connect-Graph
+   Invoke-GraphRecon
+   ```
+
+2. **Export updatable groups to CSV**:
+   ```powershell
+   Get-UpdatableGroups -Output "Updatable_Groups.csv"
+   ```
+
+3. **Add or remove yourself from a group**:
+   ```powershell
+   Add-SelfToGroup -GroupId "00000000-aaaa-bbbb-cccc-111111111111" -Email "user@tenant"
+   Remove-SelfFromGroup -GroupId "00000000-aaaa-bbbb-cccc-111111111111" -Email "user@tenant"
+   ```
+
+4. **Enumerate security groups, export to CSV**:
+   ```powershell
+   Get-SecurityGroups -OutputFile "SecurityGroups.csv"
+   ```
+
+5. **Search SharePoint & OneDrive for “password”**:
+   ```powershell
+   Invoke-SearchSharePointAndOneDrive -SearchTerm "password" -UnlimitedResults
+   ```
+
+6. **Search your mailbox for “secret” and export results**:
+   ```powershell
+   Invoke-SearchMailbox -SearchTerm "secret" -OutFile "SecretEmails.csv" -PageResults
+   ```
+
+7. **Get a quick list of all Azure AD users**:
+   ```powershell
+   Get-AzureADUsers -OutFile "AllUsers.txt"
+   ```
+
+8. **Discover privileged user assignments**:
+   ```powershell
+   Get-PrivilegedUsers
+   ```
+
+9. **Check MFA status for all users**:
+   ```powershell
+   Get-MFAStatus
+   ```
+
+10. **Clone a security group, optionally add yourself**:
+    ```powershell
+    Invoke-SecurityGroupCloner
+    ```
+
+11. **Inject an OAuth app**:
+    ```powershell
+    Invoke-InjectOAuthApp -AppName "WinDefend365" -ReplyUrl "https://localhost/windefend" -Scope "User.Read","Mail.Read"
+    ```
+
+12. **Run the “master” enumeration**:
+    ```powershell
+    Invoke-GraphEnum -DetectorFile "detectors.json"
+    ```
+
+---
+
+## 7. Troubleshooting & Common Issues
+
+1. **Permissions**:  
+   If any function fails (e.g., “Access denied”), ensure you have the correct roles or admin consent (e.g. `Directory.Read.All`, `Group.Read.All`). You can add permissions by running:
+   ```powershell
+   Connect-MgGraph -Scopes "User.Read.All","Group.ReadWrite.All"
+   ```
+
+2. **Rate Limits**:  
+   For large tenants, you may encounter HTTP 429 (rate limit) responses. The script attempts to pause and retry, but if it persists, try smaller queries or run off-peak.
+
+3. **Module Installation**:  
+   The script attempts to install missing modules. Check your environment’s policies if installations fail (e.g., `Set-PSRepository` or `Install-Module` constraints).
+
+4. **Unsupported or Unrecognised Endpoints**:  
+   Some older endpoints or newly introduced APIs may not be included in your installed Microsoft Graph module. Update your modules or check for alternative endpoints.
+
+---
+
+## 8. Licence
+
+This script is provided under the MIT Licence (unless otherwise indicated by your organisation’s policies). You are free to modify and distribute it under these terms.
