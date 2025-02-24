@@ -112,20 +112,24 @@ function Get-UpdatableGroups {
         Finds groups that the current user can update (e.g., add/remove members) and exports detailed group properties to a CSV.
 
     .PARAMETER Output
-        The path to export the updatable groups to a CSV file.
+        The path to export the updatable groups to a CSV file. Defaults to "updateable_groups.csv" if not specified.
 
     .EXAMPLE
         Get-UpdatableGroups -Output "Updatable_Groups_Detailed.csv"
+
+    .EXAMPLE
+        Get-UpdatableGroups
     #>
 
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$Output
+        [string]$Output = "updateable_groups.csv"
     )
 
+    Write-Host "[*] Discovering groups you can update ..." -ForegroundColor Cyan
+    
     # Connect to Graph if not already connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Group.Read.All"
+        Connect-Graph
     }
 
     $groups = Get-MgGroup -All
@@ -145,7 +149,7 @@ function Get-UpdatableGroups {
             $response = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/beta/roleManagement/directory/estimateAccess" -Body $body -ContentType "application/json"
 
             if ($response.value.accessDecision -eq "allowed") {
-                Write-Host "[+] You can update group: $($group.DisplayName) ($($group.Id))"
+                Write-Host "[+] You can update group: $($group.DisplayName) ($($group.Id))" -ForegroundColor Green
                 $updatableGroups += $group
             }
         } catch {
@@ -155,13 +159,11 @@ function Get-UpdatableGroups {
 
     if ($updatableGroups.Count -gt 0) {
         $updatableGroups | Export-Csv -Path $Output -NoTypeInformation
-        Write-Host "[*] Exported updatable groups with detailed properties to $Output"
+        Write-Host "[*] Exported updatable groups with detailed properties to $Output" -ForegroundColor Cyan
     } else {
         Write-Host "[-] No updatable groups found."
     }
 }
-
-
 
 
 function Add-SelfToGroup {
@@ -189,7 +191,7 @@ function Add-SelfToGroup {
 
     # Connect to Graph if not already connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "User.Read", "GroupMember.ReadWrite.All"
+        Connect-Graph
     }
 
     # Get the user's ID from their email
@@ -237,7 +239,7 @@ function Remove-SelfFromGroup {
 
     # Connect to Graph if not already connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "User.Read", "GroupMember.ReadWrite.All"
+        Connect-Graph
     }
 
     # Get User ID based on email
@@ -278,7 +280,7 @@ function Get-SharePointSiteURLs {
 
     # Connect to Graph if not already connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Sites.Read.All", "Sites.FullControl.All", "Sites.ReadWrite.All", "Sites.Search.All"
+        Connect-Graph
     }
 
     # Search API request URL
@@ -893,7 +895,7 @@ Function Invoke-DumpCAPS {
     # Ensure connection is established
     if (-not (Get-MgContext)) {
         try {
-            Connect-MgGraph -Scopes "Policy.Read.All"
+            Connect-Graph
         } catch {
             Write-Host "[-] Failed to connect to Microsoft Graph: $($_.Exception.Message)"
             return
@@ -1015,7 +1017,7 @@ Function Invoke-DumpApps {
         if (-not (Get-MgContext)) {
             Write-Host "[*] Connecting to Microsoft Graph..."
             try {
-                Connect-MgGraph -Scopes "Application.Read.All", "AppRoleAssignment.Read.All", "Directory.Read.All"
+                Connect-Graph
             } catch {
                 Write-Host "[-] Authentication Failed: $($_.Exception.Message)"
                 return
@@ -1129,7 +1131,7 @@ Function Get-AzureADUsers {
     if (-not (Get-MgContext)) {
         Write-Host "[*] Connecting to Microsoft Graph..."
         try {
-            Connect-MgGraph -Scopes "User.Read.All", "Directory.Read.All"
+            Connect-Graph
         } catch {
             Write-Host "[-] Authentication Failed: $($_.Exception.Message)"
             return
@@ -1171,7 +1173,7 @@ function Get-DynamicGroups {
 
     # Connect to Graph if not already connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Group.Read.All", "RoleManagement.Read.All"
+        Connect-Graph
     }
 
     Write-Host -ForegroundColor Yellow "[*] Fetching ALL Groups (local filter for dynamic membership)..."
@@ -1318,7 +1320,7 @@ function Invoke-InviteGuest {
 
     # Ensure Graph module connection
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "User.Invite.All"
+        Connect-Graph
     }
 
     # Get tenant ID from Graph context if not using tokens
@@ -1390,7 +1392,7 @@ function Invoke-DriveFileDownload {
 
     # Ensure Graph connection
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Files.Read.All"
+        Connect-Graph
     }
 
     # Extract Drive ID and Item ID
@@ -1450,7 +1452,7 @@ function Invoke-SearchSharePointAndOneDrive {
 
     # Ensure Graph is connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Sites.Read.All", "Files.Read.All", "Sites.Search.All"
+        Connect-Graph
     }
 
     Write-Host -ForegroundColor Yellow "[*] Searching OneDrive and SharePoint for: '$SearchTerm'..."
@@ -1608,7 +1610,7 @@ function Invoke-SearchUserAttributes {
 
     # Ensure Graph is connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "User.Read.All"
+        Connect-Graph
     }
 
     Write-Host -ForegroundColor Yellow "[*] Searching all user attributes for: '$SearchTerm'..."
@@ -1722,7 +1724,7 @@ function Invoke-SearchMailbox {
 
     # Ensure Graph is connected
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Mail.Read"
+        Connect-Graph
     }
 
     Write-Host -ForegroundColor Yellow "[*] Searching mailbox for: '$SearchTerm'..."
@@ -2058,7 +2060,7 @@ function Get-PrivilegedUsers {
 
     # Ensure connection to Microsoft Graph
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "RoleManagement.Read.Directory", "User.Read.All", "Group.Read.All", "Application.Read.All"
+        Connect-Graph
     }
 
     Write-Host "[*] Retrieving Azure AD Role Assignments..." -ForegroundColor Cyan
@@ -2151,7 +2153,7 @@ function Get-MFAStatus {
 
     # Ensure connection to Microsoft Graph
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "User.Read.All", "UserAuthenticationMethod.Read.All"
+        Connect-Graph
     }
 
     Write-Host "[*] Fetching users from Azure AD..." -ForegroundColor Yellow
@@ -2286,7 +2288,7 @@ function Get-TenantEnumeration {
 
     # Ensure connection to Microsoft Graph
     if (-not (Get-MgContext)) {
-        Connect-MgGraph -Scopes "Directory.Read.All", "Domain.Read.All", "Policy.Read.All", "User.Read.All", "Application.Read.All"
+        Connect-Graph
     }
 
     # Fetch basic tenant details
@@ -2433,7 +2435,7 @@ function Invoke-InjectOAuthApp {
         Write-Host "[>] Using provided access tokens." -ForegroundColor Yellow
     } else {
         Write-Host "[>] Authenticating with Microsoft Graph..." -ForegroundColor Cyan
-        Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.Read.All", "User.Read" -ErrorAction Stop
+        Connect-Graph
     }
 
     # Get Microsoft Graph Service Principal
